@@ -121,3 +121,4 @@ form.inline { display: inline; }
 .checkin-all { margin: 0 0 1.2rem; text-align: center; }
 .note-text { white-space: pre-wrap; word-break: break-word; }
 details { margin-top: 1rem; }
+[hidden] { display: none !important; }
