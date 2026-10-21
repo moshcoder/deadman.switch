@@ -114,9 +114,9 @@ export function homePage(ctx: Ctx): string {
 ${plansTable(ctx)}
 <div class="card" id="agents">
   <h2>From the terminal, or from your agent</h2>
-  <pre>bunx deadmanswitch checkin          # I'm alive
-bunx deadmanswitch                  # the TUI
-claude mcp add deadman -- bunx deadmanswitch mcp</pre>
+  <pre>bunx @profullstack/deadman checkin          # I'm alive
+bunx @profullstack/deadman                  # the TUI
+claude mcp add deadman -- bunx @profullstack/deadman mcp</pre>
   <p class="muted small">Full API, CLI and MCP on the <a href="/help#api">help page</a>.</p>
 </div>`,
   })
@@ -164,11 +164,11 @@ export function helpPage(ctx: Ctx): string {
 <div class="card" id="api"><h2>API, CLI and MCP</h2>
 <p>Make an API key on <a href="/me#account">your page</a>. Then:</p>
 <pre>export DEADMAN_KEY=ds_…
-bunx deadmanswitch status                 # your switches and when each is due
-bunx deadmanswitch checkin                # check in on all of them
-bunx deadmanswitch seal &lt;switch&gt; note.md  # seal a file locally and upload it
-bunx deadmanswitch open &lt;release link&gt;    # open what someone left you
-bunx deadmanswitch mcp                    # MCP server on stdio</pre>
+bunx @profullstack/deadman status                 # your switches and when each is due
+bunx @profullstack/deadman checkin                # check in on all of them
+bunx @profullstack/deadman seal &lt;switch&gt; note.md  # seal a file locally and upload it
+bunx @profullstack/deadman open &lt;release link&gt;    # open what someone left you
+bunx @profullstack/deadman mcp                    # MCP server on stdio</pre>
 <pre>curl -X POST ${SITE}/api/v1/checkin -H "authorization: Bearer $DEADMAN_KEY"
 curl ${SITE}/api/v1/switches -H "authorization: Bearer $DEADMAN_KEY"</pre>
 <p class="muted small">Endpoints: <code>GET /api/v1/me</code>, <code>GET|POST /api/v1/switches</code>, <code>GET|PATCH|DELETE /api/v1/switches/:id</code>, <code>PUT /api/v1/switches/:id/bundle</code>, <code>POST /api/v1/switches/:id/(pause|resume|recipients)</code>, <code>DELETE /api/v1/switches/:id/recipients/:rid</code>, <code>POST /api/v1/checkin</code>, <code>GET /api/v1/releases/:token</code>.</p>

@@ -1,8 +1,9 @@
 {
-  "name": "deadmanswitch",
-  "version": "0.1.2",
+  "name": "@profullstack/deadman",
+  "version": "0.1.3",
   "description": "deadman.switch: a dead man's switch for your crypto. Seal where the keys are, check in now and then, and if you stop, the people you chose get it. Sealed in your browser; we never see it.",
   "license": "MIT",
+  "publishConfig": { "access": "public" },
   "type": "module",
   "homepage": "https://deadman.switch.pit.world",
   "repository": {

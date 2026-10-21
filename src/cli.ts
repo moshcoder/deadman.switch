@@ -23,7 +23,7 @@ export const HELP = `deadman ${VERSION}: a dead man's switch for your crypto (ht
   deadman open <release link> [--out=dir]
                                      open what someone left you
   deadman pause|resume <switch>
-  deadman mcp                        MCP server: claude mcp add deadman -- bunx deadmanswitch mcp
+  deadman mcp                        MCP server: claude mcp add deadman -- bunx @profullstack/deadman mcp
   deadman serve [--port N]           run your own instance (DATABASE_URL, DEADMAN_SECRET)
 
   --json                             machine-readable output

@@ -1,7 +1,7 @@
 /**
  * `deadman mcp`: deadman.switch for an agent, on stdio.
  *
- *   claude mcp add deadman -- bunx deadmanswitch mcp
+ *   claude mcp add deadman -- bunx @profullstack/deadman mcp
  *
  * Needs DEADMAN_KEY (or `deadman login`). Sealing stays in the CLI and the
  * browser on purpose: an agent never handles the passphrase or the plaintext.
