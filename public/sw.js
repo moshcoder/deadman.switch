@@ -1,6 +1,7 @@
-// family.ancestry service worker: caches the app shell so it installs and opens offline.
-// Tree data is private and changes, so it is never cached: offline you get a page saying so.
-const CACHE = 'fa-shell-v1'
+// deadman.switch service worker: installs the app, shows check-in reminders,
+// and checks you in straight from the notification's "I'm OK" button.
+// Switches and bundles are private, so pages are never cached.
+const CACHE = 'ds-shell-v1'
 const SHELL = ['/offline.html', '/style.css', '/app.js', '/favicon.svg', '/icon-192.png', '/manifest.webmanifest']
 
 self.addEventListener('install', (event) => {
@@ -14,14 +15,41 @@ self.addEventListener('activate', (event) => {
 self.addEventListener('fetch', (event) => {
   const req = event.request
   if (req.method !== 'GET' || new URL(req.url).origin !== self.location.origin) return
-  const path = new URL(req.url).pathname
   if (req.mode === 'navigate') {
-    // threatcrush-disable-next-line js-ssrf-outbound-request same-origin navigation only, checked above
     event.respondWith(fetch(req).catch(() => caches.match('/offline.html')))
     return
   }
-  if (SHELL.includes(path)) {
-    // threatcrush-disable-next-line js-ssrf-outbound-request same-origin shell asset, checked above
-    event.respondWith(fetch(req).then((res) => { const copy = res.clone(); caches.open(CACHE).then((c) => c.put(path, copy)); return res }).catch(() => caches.match(path)))
+  const path = new URL(req.url).pathname
+  if (SHELL.includes(path)) event.respondWith(fetch(req).catch(() => caches.match(path)))
+})
+
+self.addEventListener('push', (event) => {
+  let data = {}
+  try { data = event.data ? event.data.json() : {} } catch {}
+  event.waitUntil(
+    self.registration.showNotification(data.title || 'Time to check in', {
+      body: data.body || '',
+      tag: 'checkin',
+      renotify: true,
+      requireInteraction: true,
+      data: { url: data.url || '/me', checkin: data.checkin || '' },
+      actions: data.checkin ? [{ action: 'checkin', title: "I'm OK" }] : [],
+      icon: '/icon-192.png',
+    }),
+  )
+})
+
+self.addEventListener('notificationclick', (event) => {
+  const { url, checkin } = event.notification.data || {}
+  event.notification.close()
+  if (event.action === 'checkin' && checkin) {
+    event.waitUntil(
+      fetch(`/c/${encodeURIComponent(checkin)}`, { method: 'POST', headers: { accept: 'application/json', 'x-via': 'push' } })
+        .then((r) => r.json())
+        .then((r) => self.registration.showNotification(r.ok ? 'Checked in' : 'Already checked in', { body: r.ok ? 'Thanks. See you next time.' : 'You are fine.', tag: 'checkin', icon: '/icon-192.png' }))
+        .catch(() => self.clients.openWindow(url)),
+    )
+    return
   }
+  event.waitUntil(self.clients.openWindow(url || '/me'))
 })
