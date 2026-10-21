@@ -302,14 +302,14 @@ export class Store {
   /** Count one reminder, if nobody else just did. */
   async claimReminder(sw: Switch): Promise<boolean> {
     const rows = await this.sql`UPDATE switches SET reminders_sent = reminders_sent + 1, last_reminder_at = ${this.now()}
-      WHERE id = ${sw.id} AND state = 'armed' AND reminders_sent = ${sw.reminders_sent} AND due_at = ${sw.due_at} RETURNING id`
+      WHERE id = ${sw.id} AND state = 'armed' AND reminders_sent = ${sw.reminders_sent} AND date_trunc('milliseconds', due_at) = ${sw.due_at} RETURNING id`
     return rows.length === 1
   }
 
   /** Flip to fired, if it is still the overdue switch we looked at. */
   async claimFire(sw: Switch): Promise<boolean> {
     const rows = await this.sql`UPDATE switches SET state = 'fired', fired_at = ${this.now()}
-      WHERE id = ${sw.id} AND state = 'armed' AND due_at = ${sw.due_at} RETURNING id`
+      WHERE id = ${sw.id} AND state = 'armed' AND date_trunc('milliseconds', due_at) = ${sw.due_at} RETURNING id`
     return rows.length === 1
   }
 
