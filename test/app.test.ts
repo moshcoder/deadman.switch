@@ -177,6 +177,17 @@ run('deadman.switch end to end', () => {
     expect((await req(`/s/${switchId}/bundle`, { method: 'POST', body: JSON.stringify({ bundle: rel.bundle }), headers: { 'content-type': 'application/json', 'x-csrf': csrf } })).status).toBe(409)
   })
 
+  test('a deadline written by SQL (microseconds) still reminds and fires', async () => {
+    const u = (await store.userByEmail('owner@example.com'))!
+    const sw = await store.createSwitch(u.id, { name: 'Micro', interval_days: 1, grace_days: 1 })
+    await store.sql`UPDATE switches SET due_at = ${new Date(clock - 5 * DAY)}::timestamptz + interval '123 microseconds' WHERE id = ${sw.id}`
+    const deps = { store, notifier, plans, key: KEY, origin: 'x' }
+    expect((await tick(deps, clock)).reminded).toBeGreaterThanOrEqual(1)
+    const after = (await store.switchById(sw.id))!
+    expect(after.reminders_sent).toBe(1)
+    await store.deleteSwitch(sw.id)
+  })
+
   test('paying: checkout records the payment, a signed webhook grants a year once', async () => {
     await resignIn()
     const res = await post('/plans/checkout', { product: 'year', chain: 'USDC_SOL' })
