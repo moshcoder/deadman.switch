@@ -1,6 +1,6 @@
 {
   "name": "deadmanswitch",
-  "version": "0.1.1",
+  "version": "0.1.2",
   "description": "deadman.switch: a dead man's switch for your crypto. Seal where the keys are, check in now and then, and if you stop, the people you chose get it. Sealed in your browser; we never see it.",
   "license": "MIT",
   "type": "module",

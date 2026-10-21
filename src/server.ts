@@ -550,7 +550,8 @@ export async function serve(opts: { port?: number } = {}) {
   const notify = notifyConfig(env, RELAY_ORIGIN)
   const notifier = createNotifier(notify, store)
   const app = createApp({ store, key: env.DEADMAN_SECRET, plans, notifier, notify, ...(env.TELNYX_PUBLIC_KEY ? { telnyxPublicKey: env.TELNYX_PUBLIC_KEY } : {}) })
-  startPitFooterRefresh(SELF)
+  // The relay hostname: pit.world serves its Moshpit template for *.pit.world even before the ring lists us.
+  startPitFooterRefresh(`${SELF}.pit.world`)
   startRingFooterRefresh()
   startRingRefresh()
   if (env.WORKER !== 'off') startWorker({ store, notifier, plans, key: env.DEADMAN_SECRET, origin: RELAY_ORIGIN, log: console.log })
