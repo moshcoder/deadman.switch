@@ -5,8 +5,8 @@ logins are, seal it with a passphrase only your family knows, and check in now
 and then. If you stop checking in, the people you chose get the sealed bundle.
 
 - Web: <https://deadman.switch.pit.world> (on Moshpit DNS: <https://deadman.switch>)
-- CLI and TUI: `bunx deadmanswitch`
-- MCP: `claude mcp add deadman -- bunx deadmanswitch mcp`
+- CLI and TUI: `bunx @profullstack/deadman`
+- MCP: `claude mcp add deadman -- bunx @profullstack/deadman mcp`
 - API: `https://deadman.switch.pit.world/api/v1` (`Authorization: Bearer ds_…`)
 
 ## How it works
