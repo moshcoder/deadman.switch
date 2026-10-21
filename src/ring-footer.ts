@@ -11,14 +11,14 @@
 import { descriptor, footerHtml, footerHtmlSync, type FooterOptions } from '@profullstack/footer'
 
 /** The ring member URL (the web2 hostname; hops are measured from it). */
-export const RING_SITE = 'https://pay.agent.pit.world/'
+export const RING_SITE = 'https://deadman.switch.pit.world/'
 
 const OPTIONS: FooterOptions = {
   site: RING_SITE,
-  name: 'pay.agent',
+  name: 'deadman.switch',
   links: [
-    { label: 'Help', href: '/help' },
-    { label: 'Source', href: 'https://github.com/moshcoder/pay.agent' },
+    { label: 'How it works', href: '/help' },
+    { label: 'Source', href: 'https://github.com/moshcoder/deadman.switch' },
     { label: 'Payments by CoinPay', href: 'https://coinpayportal.com' },
   ],
 }
@@ -29,7 +29,7 @@ let cached = footerHtmlSync(OPTIONS)
 export const ringFooter = (): string => cached
 
 /** /.well-known/openwebring.json */
-export const ringDescriptor = () => descriptor({ site: RING_SITE, name: 'pay.agent' })
+export const ringDescriptor = () => descriptor({ site: RING_SITE, name: 'deadman.switch' })
 
 export function startRingFooterRefresh(everyMs = 15 * 60_000): () => void {
   const refresh = () =>

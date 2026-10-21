@@ -96,3 +96,28 @@ details summary { cursor: pointer; font-weight: 600; }
 .ring-bar .ring-start { margin-left: auto; color: var(--accent); font-weight: 700; }
 @media (max-width: 640px) { .ring-bar .ring-home span { display: none; } }
 footer.pfs-footer { max-width: 760px; margin: 2rem auto 0; color: var(--muted); border-top-color: var(--line); --pfs-footer-muted: var(--muted); --pfs-footer-size: .88rem; }
+/* deadman.switch */
+.grid2 { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 16px; }
+.plan { border: 1px solid var(--line); border-radius: 12px; padding: 1rem 1.1rem; }
+.plan h3 { margin: 0; }
+.plan ul { padding-left: 1.1rem; margin: .5rem 0 1rem; }
+.plan.featured { border-color: var(--accent); }
+.price { font-size: 1.6rem; font-weight: 800; margin: .3rem 0; }
+.price .small { font-weight: 400; }
+.stack { display: flex; flex-direction: column; gap: .8rem; margin: .8rem 0; }
+.stack label { display: flex; flex-direction: column; gap: .3rem; font-weight: 600; }
+.stack label:has(input[type=checkbox]), .stack label:has(input[type=radio]) { flex-direction: row; align-items: center; font-weight: 400; }
+input, select, textarea { font: inherit; color: var(--text); background: var(--bg); border: 1px solid var(--line); border-radius: 8px; padding: .55rem .7rem; max-width: 100%; }
+textarea { width: 100%; resize: vertical; font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; font-size: .9rem; }
+.row { display: flex; flex-wrap: wrap; gap: .5rem; align-items: center; margin: .6rem 0; }
+.row input { flex: 1 1 180px; }
+form.inline { display: inline; }
+.btn.danger { background: var(--fail); color: #fff; border-color: var(--fail); }
+.hero.left { text-align: left; padding-bottom: .5rem; }
+.narrow { max-width: 460px; margin-inline: auto; }
+.switches, .people { list-style: none; padding: 0; margin: 0; }
+.switches li, .people li { padding: .7rem 0; border-bottom: 1px solid var(--line); }
+.switches li:last-child, .people li:last-child { border: 0; }
+.checkin-all { margin: 0 0 1.2rem; text-align: center; }
+.note-text { white-space: pre-wrap; word-break: break-word; }
+details { margin-top: 1rem; }
