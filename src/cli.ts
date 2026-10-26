@@ -23,6 +23,8 @@ export const HELP = `deadman ${VERSION}: a dead man's switch for your crypto (ht
   deadman open <release link> [--out=dir]
                                      open what someone left you
   deadman pause|resume <switch>
+  deadman redeem <code>              redeem a credit code (days of Keeper)
+  deadman invites [new] [--note=...]  your invite links (3 each; you both get a week of Keeper)
   deadman mcp                        MCP server: claude mcp add deadman -- bunx @profullstack/deadman mcp
   deadman serve [--port N]           run your own instance (DATABASE_URL, DEADMAN_SECRET)
 
@@ -148,6 +150,23 @@ export async function main(argv = process.argv.slice(2), out: Out = console, cli
         const s = await client.find(rest.join(' '))
         const next = command === 'pause' ? await client.pause(s.id) : await client.resume(s.id)
         show(next, row(next))
+        return 0
+      }
+      case 'redeem': {
+        if (!rest[0]) throw new Error('usage: deadman redeem <code>')
+        const r = await client.redeem(rest.join(''))
+        show(r, `${r.message}\nplan: ${r.plan}`)
+        return 0
+      }
+      case 'invites': {
+        if (rest[0] === 'new') {
+          const r = await client.newInvite(flag('note') ?? '')
+          show(r, `invite link (works once, shown once):\n${r.link}`)
+          return 0
+        }
+        const v = await client.invites()
+        const lines = v.invites.map((i) => `  ${(i.note || 'invite').padEnd(24)} ${i.used_at ? `used ${new Date(i.used_at).toISOString().slice(0, 10)}` : i.revoked_at ? 'withdrawn' : 'open'}`)
+        show(v, `${v.quota.left} of ${v.quota.total} invites left (you both get ${v.bonus_days} days of Keeper)\n${lines.map((l) => `${l}\n`).join('')}your link: ${v.affiliate}\nmake one: deadman invites new --note="for Sam"`)
         return 0
       }
       case 'seal': {

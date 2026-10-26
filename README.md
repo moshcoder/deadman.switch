@@ -38,6 +38,35 @@ The server cannot read a bundle, and nobody can open one before it fires.
 Paid in crypto through [CoinPay](https://coinpayportal.com). A lapsed plan never
 switches protection off: existing switches keep running on the free channels.
 
+## Credit codes and invites
+
+**Credit codes** ([`@profullstack/redeem-credits`](https://github.com/profullstack/redeem-credits)):
+a code grants the unit `keeper_days`, days of the Keeper plan. Redeem it under
+"Have a code?" on `/me`, with `deadman redeem <code>`, MCP `redeem_code`, or
+`POST /api/v1/redeem {"code"}`. The days go through the same columns a payment
+writes (`users.plan` / `plan_until`): on the end of a running plan, from now on
+a lapsed one. Keeper for life is refused before the code is spent, so it can be
+passed on. Days granted out of band are applied when that person next opens `/me`.
+
+The redeem-credits CLI only speaks SQLite, so mint on the box with `bin/codes.ts`:
+
+```sh
+cd /opt/deadman.switch && set -a && . /root/.local/share/deadman-switch/app.env && set +a
+bun bin/codes.ts mint --days 30 --label "for Dan" [--max 1] [--expires 30d]
+bun bin/codes.ts list
+bun bin/codes.ts revoke <codeId>
+bun bin/codes.ts grant someone@example.com --days 7
+```
+
+**Invites** ([`@profullstack/affiliates`](https://github.com/profullstack/affiliates)):
+three single-use links per account at `/invites` (`deadman invites [new]`,
+`GET/POST /api/v1/invites`). A link lands on `/i/<code>`, rides in a 7-day
+cookie and on the sign-in email link (so it survives opening the email in
+another browser), and is spent when a **new** account is made through it. Then
+both people get **7 days of Keeper**. Every account also has an open affiliate
+link (`/?ref=<code>`), remembered first-touch for 30 days and credited to new
+accounts. `bin/codes.ts invites <email> --total N` changes someone's allowance.
+
 ## CLI
 
 ```sh
@@ -48,6 +77,8 @@ deadman new "My crypto" --every=30 --grace=7 --to=kid@example.com
 deadman seal "My crypto" note.md seed-card.png --hint="first dog, then the year"
 deadman read "My crypto"
 deadman open https://deadman.switch.pit.world/r/r_…
+deadman redeem CR-XXXX-XXXX-XXXX-XXXX
+deadman invites new --note="for Sam"
 ```
 
 ## Running it
