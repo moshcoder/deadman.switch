@@ -15,11 +15,12 @@ import { deleteCookie, getCookie, setCookie } from 'hono/cookie'
 import { Store, type Switch, type User } from './db.js'
 import { GRACES, INTERVALS } from './engine.js'
 import {
-  checkedInPage, checkinPage, confirmSigninPage, dashboardPage, helpPage, homePage, messagePage, plansPage, releasePage, signinPage, switchPage, type Ctx,
+  checkedInPage, checkinPage, confirmSigninPage, dashboardPage, helpPage, homePage, invitedPage, invitesPage, messagePage, plansPage, releasePage, signinPage, switchPage, type Ctx,
 } from './html.js'
 import { createNotifier, notifyConfig, telnyxCommand, type Notifier, type NotifyConfig } from './notify.js'
 import { startPitFooterRefresh } from './pit-footer.js'
 import { isPaid, limitsFor, planConfig, planLabel, readWebhook, SETTLED, startCheckout, verifyWebhook, type PlanConfig, type Product } from './plans.js'
+import { INVITE_BONUS_DAYS, INVITE_CODE, REF_CODE, RewardError, Rewards } from './rewards.js'
 import { ringDescriptor, startRingFooterRefresh } from './ring-footer.js'
 import { RING_PLACEHOLDER, ringBar, startRingRefresh, visitorOnMoshpit } from './ring.js'
 import { checkSealed } from './seal.js'
@@ -32,6 +33,10 @@ const SELF = 'deadman.switch'
 const DIRECT_ORIGIN = 'https://deadman.switch'
 export const RELAY_ORIGIN = 'https://deadman.switch.pit.world'
 const SESSION = 'ds_session'
+/** An invite link someone opened, until they make an account (7 days). */
+const INVITE = 'ds_invite'
+/** The first affiliate link (?ref=) a visitor arrived through (30 days). */
+const REF = 'ds_ref'
 
 const SECURITY_HEADERS: Record<string, string> = {
   'content-security-policy': "default-src 'none'; style-src 'self' 'unsafe-inline'; script-src 'self' https://crawlproof.com; img-src 'self' data: blob: https://built.indie.pit.world https://pwamart.com; connect-src 'self' https://crawlproof.com; worker-src 'self'; manifest-src 'self'; form-action 'self' https://coinpayportal.com; base-uri 'none'; frame-ancestors 'none'",
@@ -67,6 +72,8 @@ export function createApp(deps: Deps) {
   const app = new Hono()
   const signinLimit = new Limiter(10, 60 * 60_000)
   const apiLimit = new Limiter(120, 60_000)
+  const redeemLimit = new Limiter(10, 10 * 60_000)
+  const rewards = new Rewards(store)
 
   const direct = (c: Context) => visitorOnMoshpit(SELF, c.req.header('host'), c.req.header('x-moshpit-name'))
   const https = (c: Context) => (c.req.header('x-forwarded-proto') ?? 'https') === 'https'
@@ -90,6 +97,13 @@ export function createApp(deps: Deps) {
     }
     await next()
     for (const [k, v] of Object.entries(SECURITY_HEADERS)) c.header(k, v)
+  })
+  const cookieOpts = (c: Context, maxAge: number) => ({ httpOnly: true, secure: deps.secureCookies ?? https(c), sameSite: 'Lax' as const, path: '/', maxAge })
+  // Anyone arriving with ?ref=<affiliate code> is remembered for when they make an account (first touch wins).
+  app.use('*', async (c, next) => {
+    const ref = c.req.query('ref')
+    if (ref && REF_CODE.test(ref) && !getCookie(c, REF)) setCookie(c, REF, ref, cookieOpts(c, 30 * 86_400))
+    await next()
   })
 
   app.get('/health', (c) => c.json({ ok: true, version: VERSION }))
@@ -123,7 +137,9 @@ export function createApp(deps: Deps) {
     if (!signinLimit.allow(`ip:${ip(c)}`) || (await store.recentLoginLinks(email, 60 * 60_000)) >= 5) {
       return page(c, signinPage(ctx, { error: 'Too many sign-in emails. Try again in an hour.' }), 429)
     }
-    const t = await store.newLoginLink(email)
+    const invite = getCookie(c, INVITE)
+    const ref = getCookie(c, REF)
+    const t = await store.newLoginLink(email, undefined, { invite: invite && INVITE_CODE.test(invite) ? invite : null, ref: ref && REF_CODE.test(ref) ? ref : null })
     const next = safeNext(f.next)
     await notifier.mail({
       to: email,
@@ -137,9 +153,16 @@ export function createApp(deps: Deps) {
 
   app.post('/auth/:token', async (c) => {
     const f = await form(c)
-    const email = await store.takeLoginLink(c.req.param('token'))
-    if (!email) return page(c, messagePage(await ctxOf(c), { title: 'That link is used up', message: 'Sign-in links work once, for 20 minutes.', link: { href: '/signin', label: 'Send a new one' } }), 400)
-    const user = await store.ensureUser(email)
+    const link = await store.takeLoginLink(c.req.param('token'))
+    if (!link) return page(c, messagePage(await ctxOf(c), { title: 'That link is used up', message: 'Sign-in links work once, for 20 minutes.', link: { href: '/signin', label: 'Send a new one' } }), 400)
+    const { user, created } = await store.signUp(link.email)
+    // A new account: spend the invite it came through and credit the affiliate link it arrived by.
+    // The codes ride on the sign-in link too, for when the email opens in another browser.
+    const invite = link.invite ?? getCookie(c, INVITE)
+    if (invite && created) await rewards.acceptInvite(invite, user).catch(() => null)
+    if (getCookie(c, INVITE)) deleteCookie(c, INVITE, { path: '/' })
+    const ref = link.ref ?? getCookie(c, REF)
+    if (ref && created) await rewards.affiliates.attribute(ref, user.id).catch(() => null)
     const sid = await store.newSession(user.id)
     setCookie(c, SESSION, sid, { httpOnly: true, secure: deps.secureCookies ?? https(c), sameSite: 'Lax', path: '/', maxAge: 60 * 86400 })
     return c.redirect(safeNext(f.next))
@@ -168,7 +191,54 @@ export function createApp(deps: Deps) {
   app.get('/me', async (c) => {
     const s = await signedIn(c)
     if (!s) return c.redirect('/signin?next=/me')
+    // Keeper days granted outside a redemption (the redeem-credits CLI, an invite) land here.
+    if (await rewards.apply(s.user).catch(() => null)) s.ctx.user = await store.user(s.user.id)
     return dashboard(c, s.ctx, c.req.query('flash') ? { flash: c.req.query('flash')! } : {})
+  })
+
+  app.post('/me/redeem', async (c) => {
+    const s = await signedIn(c)
+    if (!s) return c.redirect('/signin?next=/me')
+    const f = await form(c)
+    if (!csrfOk(c, f.csrf)) return dashboard(c, s.ctx, { flash: 'That form went stale. Try again.' })
+    if (!redeemLimit.allow(`redeem:${s.user.id}`)) return dashboard(c, s.ctx, { flash: 'Too many tries. Wait a few minutes.' })
+    try {
+      const r = await rewards.redeem(s.user, f.code)
+      return c.redirect(`/me?flash=${encodeURIComponent(r.message)}#code`)
+    } catch (e) {
+      return dashboard(c, s.ctx, { flash: e instanceof RewardError ? e.message : 'That code did not work. Try again.' })
+    }
+  })
+
+  // ---- invites and affiliate links ----------------------------------------------
+
+  app.get('/i/:code', async (c) => {
+    const code = c.req.param('code')
+    const ctx = await ctxOf(c)
+    if (!INVITE_CODE.test(code)) return page(c, messagePage(ctx, { title: 'Not an invite', message: 'That invite link is not right. Check you copied all of it.' }), 404)
+    if (!ctx.user) setCookie(c, INVITE, code, cookieOpts(c, 7 * 86_400))
+    return page(c, invitedPage(ctx, INVITE_BONUS_DAYS))
+  })
+
+  const invitesView = async (c: Context, ctx: Ctx, extra: { link?: string; error?: string } = {}, status = 200) =>
+    page(c, invitesPage(ctx, { ...(await rewards.invitesView(ctx.user!, RELAY_ORIGIN)), ...extra }), status)
+
+  app.get('/invites', async (c) => {
+    const s = await signedIn(c)
+    if (!s) return c.redirect('/signin?next=/invites')
+    return invitesView(c, s.ctx)
+  })
+
+  app.post('/invites', async (c) => {
+    const s = await signedIn(c)
+    if (!s) return c.redirect('/signin?next=/invites')
+    const f = await form(c)
+    if (!csrfOk(c, f.csrf)) return invitesView(c, s.ctx, { error: 'That form went stale. Try again.' }, 400)
+    try {
+      return invitesView(c, s.ctx, { link: await rewards.createInvite(s.user, RELAY_ORIGIN, String(f.note ?? '').trim()) })
+    } catch (e) {
+      return invitesView(c, s.ctx, { error: e instanceof RewardError ? e.message : 'Could not make an invite.' }, 400)
+    }
   })
 
   app.post('/me/:action{(checkin|phone|name|key|delete)}', async (c) => {
@@ -428,8 +498,30 @@ export function createApp(deps: Deps) {
   })
 
   api.get('/me', async (c) => {
-    const u = c.get('user')
+    let u = c.get('user')
+    if (await rewards.apply(u).catch(() => null)) u = (await store.user(u.id))!
     return c.json({ email: u.email, name: u.name, plan: planLabel(plans, u), paid: isPaid(plans, u), limits: limitsFor(plans, u), switches: await Promise.all((await store.switches(u.id)).map(view)) })
+  })
+  api.post('/redeem', async (c) => {
+    const u = c.get('user')
+    if (!redeemLimit.allow(`redeem:${u.id}`)) return c.json({ error: 'too many tries; wait a few minutes' }, 429)
+    const b = ((await c.req.json().catch(() => ({}))) ?? {}) as { code?: string }
+    try {
+      const r = await rewards.redeem(u, b.code)
+      const fresh = (await store.user(u.id))!
+      return c.json({ ok: true, message: r.message, days: r.days, plan: planLabel(plans, fresh), paid: isPaid(plans, fresh), plan_until: fresh.plan_until })
+    } catch (e) {
+      return c.json({ error: e instanceof RewardError ? e.message : 'that code did not work' }, 400)
+    }
+  })
+  api.get('/invites', async (c) => c.json(await rewards.invitesView(c.get('user'), RELAY_ORIGIN)))
+  api.post('/invites', async (c) => {
+    const b = ((await c.req.json().catch(() => ({}))) ?? {}) as { note?: string }
+    try {
+      return c.json({ link: await rewards.createInvite(c.get('user'), RELAY_ORIGIN, String(b.note ?? '').trim()) }, 201)
+    } catch (e) {
+      return c.json({ error: e instanceof RewardError ? e.message : 'could not make an invite' }, 400)
+    }
   })
   api.get('/switches', async (c) => c.json({ switches: await Promise.all((await store.switches(c.get('user').id)).map(view)) }))
   api.post('/switches', async (c) => {

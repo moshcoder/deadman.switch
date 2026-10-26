@@ -129,6 +129,9 @@ CREATE TABLE IF NOT EXISTS payments (
   updated_at timestamptz NOT NULL DEFAULT now()
 );
 CREATE INDEX IF NOT EXISTS payments_user ON payments(user_id);
+-- 0.2.0: an invite or affiliate code rides on the sign-in link, so it survives the email opening in another browser.
+ALTER TABLE login_links ADD COLUMN IF NOT EXISTS invite text;
+ALTER TABLE login_links ADD COLUMN IF NOT EXISTS ref text;
 CREATE TABLE IF NOT EXISTS calls (
   call_id text PRIMARY KEY,
   switch_id text NOT NULL REFERENCES switches(id) ON DELETE CASCADE,
@@ -167,9 +170,14 @@ export class Store {
   }
 
   async ensureUser(email: string): Promise<User> {
+    return (await this.signUp(email)).user
+  }
+
+  /** ensureUser, also saying whether this call made the account (an invite only counts for a new one). */
+  async signUp(email: string): Promise<{ user: User; created: boolean }> {
     const e = email.trim().toLowerCase()
-    await this.sql`INSERT INTO users (id, email) VALUES (${id()}, ${e}) ON CONFLICT (email) DO NOTHING`
-    return (await this.userByEmail(e))!
+    const made = await this.sql`INSERT INTO users (id, email) VALUES (${id()}, ${e}) ON CONFLICT (email) DO NOTHING RETURNING id`
+    return { user: (await this.userByEmail(e))!, created: made.length === 1 }
   }
 
   async updateUser(userId: string, fields: { name?: string; phone?: string }): Promise<void> {
@@ -181,9 +189,10 @@ export class Store {
     await this.sql`DELETE FROM users WHERE id = ${userId}`
   }
 
-  async newLoginLink(email: string, ttlMs = 20 * 60_000): Promise<string> {
+  async newLoginLink(email: string, ttlMs = 20 * 60_000, carry: { invite?: string | null; ref?: string | null } = {}): Promise<string> {
     const t = token('', 32)
-    await this.sql`INSERT INTO login_links (token_hash, email, expires_at) VALUES (${hash(t)}, ${email.toLowerCase()}, ${new Date(this.now().getTime() + ttlMs)})`
+    await this.sql`INSERT INTO login_links (token_hash, email, expires_at, invite, ref)
+      VALUES (${hash(t)}, ${email.toLowerCase()}, ${new Date(this.now().getTime() + ttlMs)}, ${carry.invite ?? null}, ${carry.ref ?? null})`
     return t
   }
 
@@ -192,10 +201,10 @@ export class Store {
     return r.n
   }
 
-  /** One use, unexpired: the email it was sent to, or null. */
-  async takeLoginLink(t: string): Promise<string | null> {
-    const [r] = await this.sql`DELETE FROM login_links WHERE token_hash = ${hash(t)} AND expires_at > ${this.now()} RETURNING email`
-    return r?.email ?? null
+  /** One use, unexpired: the email it was sent to (and any invite/ref it carries), or null. */
+  async takeLoginLink(t: string): Promise<{ email: string; invite: string | null; ref: string | null } | null> {
+    const [r] = await this.sql`DELETE FROM login_links WHERE token_hash = ${hash(t)} AND expires_at > ${this.now()} RETURNING email, invite, ref`
+    return r ? { email: r.email, invite: r.invite ?? null, ref: r.ref ?? null } : null
   }
 
   async newSession(userId: string, ttlMs = 60 * DAY): Promise<string> {
@@ -409,6 +418,19 @@ export class Store {
       }
       return { granted: true }
     })
+  }
+
+  /**
+   * Days of Keeper from a credit code or an invite, through the same columns a
+   * payment writes: on the end of a running plan, from now on a lapsed one.
+   * Keeper for life is left alone. The new end date, or null.
+   */
+  async extendKeeper(userId: string, days: number): Promise<Date | null> {
+    const [r] = await this.sql`UPDATE users SET plan = 'pro',
+      plan_until = greatest(coalesce(plan_until, ${this.now()}), ${this.now()}) + make_interval(secs => ${Math.round(days * 86_400)}),
+      renewal_warned_at = NULL
+      WHERE id = ${userId} AND plan <> 'lifetime' RETURNING plan_until`
+    return r?.plan_until ?? null
   }
 
   /** Paid plans that end within `withinMs` and have not been warned this period. */

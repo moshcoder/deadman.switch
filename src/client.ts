@@ -28,6 +28,13 @@ export type ApiSwitch = {
   bundle?: Sealed | null
 }
 export type ApiMe = { email: string; name: string; plan: string; paid: boolean; limits: { switches: number; recipients: number; bundleBytes: number }; switches: ApiSwitch[] }
+export type ApiRedeem = { ok: true; message: string; days: number; plan: string; paid: boolean; plan_until: string | null }
+export type ApiInvites = {
+  quota: { total: number; used: number; left: number }
+  invites: { id: string; note: string; created_at: number; expires_at: number | null; used_at: number | null; revoked_at: number | null }[]
+  affiliate: string
+  bonus_days: number
+}
 export type ApiRelease = { from: string; switch: string; last_checkin_at: string; hint: string; bundle: Sealed | null }
 
 export const KEY_FILE = join(homedir(), '.config', 'deadman', 'key')
@@ -78,6 +85,10 @@ export class DeadmanClient {
   removeRecipient = (id: string, rid: string) => this.call<ApiSwitch>('DELETE', `/api/v1/switches/${encodeURIComponent(id)}/recipients/${encodeURIComponent(rid)}`)
   putBundle = (id: string, bundle: Sealed, hint?: string) => this.call<{ ok: true; bytes: number }>('PUT', `/api/v1/switches/${encodeURIComponent(id)}/bundle`, { bundle, ...(hint !== undefined ? { hint } : {}) })
   checkin = (via: 'cli' | 'mcp' | 'tui' | 'api', switchId?: string) => this.call<{ checked_in: ApiSwitch[] }>('POST', '/api/v1/checkin', { via, ...(switchId ? { switch_id: switchId } : {}) }).then((r) => r.checked_in)
+
+  redeem = (code: string) => this.call<ApiRedeem>('POST', '/api/v1/redeem', { code })
+  invites = () => this.call<ApiInvites>('GET', '/api/v1/invites')
+  newInvite = (note = '') => this.call<{ link: string }>('POST', '/api/v1/invites', { note })
 
   /** A release link (https://…/r/r_…) or bare token; needs no key. */
   release(link: string): Promise<ApiRelease> {

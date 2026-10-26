@@ -58,6 +58,9 @@ export function createMcpServer(client = new DeadmanClient()): McpServer {
   )
   server.tool('pause', 'Pause a switch (nothing is sent while paused).', { switch: sw }, wrap(async ({ switch: s }: any) => client.pause((await client.find(s)).id)))
   server.tool('resume', 'Resume a paused switch; a fresh period starts now.', { switch: sw }, wrap(async ({ switch: s }: any) => client.resume((await client.find(s)).id)))
+  server.tool('redeem_code', 'Redeem a credit code the person was given (CR-XXXX-XXXX-XXXX-XXXX): days of the Keeper plan, added to their account.', { code: z.string().min(4).max(64) }, wrap(({ code }: { code: string }) => client.redeem(code)))
+  server.tool('list_invites', "The person's invite links (three each; when someone new joins through one, both get a week of Keeper) and their open ?ref= link.", {}, wrap(() => client.invites()))
+  server.tool('create_invite', 'Make one single-use invite link (shown once). note is a private reminder of who it is for.', { note: z.string().max(80).optional() }, wrap(({ note }: { note?: string }) => client.newInvite(note ?? '')))
   return server
 }
 

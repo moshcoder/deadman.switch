@@ -74,7 +74,7 @@ ${RING_PLACEHOLDER}
   <nav aria-label="Site">
     <a href="/help">How it works</a>
     <a href="/plans">Plans</a>
-    ${signedIn ? `<a href="/me">My switches</a><form method="post" action="/auth/logout"><input type="hidden" name="csrf" value="${esc(o.ctx.csrf)}"><button class="linkish">Sign out</button></form>` : '<a href="/signin">Sign in</a>'}
+    ${signedIn ? `<a href="/me">My switches</a><a href="/invites">Invites</a><form method="post" action="/auth/logout"><input type="hidden" name="csrf" value="${esc(o.ctx.csrf)}"><button class="linkish">Sign out</button></form>` : '<a href="/signin">Sign in</a>'}
   </nav>
 </header>
 <main>
@@ -171,8 +171,11 @@ bunx @profullstack/deadman open &lt;release link&gt;    # open what someone left
 bunx @profullstack/deadman mcp                    # MCP server on stdio</pre>
 <pre>curl -X POST ${SITE}/api/v1/checkin -H "authorization: Bearer $DEADMAN_KEY"
 curl ${SITE}/api/v1/switches -H "authorization: Bearer $DEADMAN_KEY"</pre>
-<p class="muted small">Endpoints: <code>GET /api/v1/me</code>, <code>GET|POST /api/v1/switches</code>, <code>GET|PATCH|DELETE /api/v1/switches/:id</code>, <code>PUT /api/v1/switches/:id/bundle</code>, <code>POST /api/v1/switches/:id/(pause|resume|recipients)</code>, <code>DELETE /api/v1/switches/:id/recipients/:rid</code>, <code>POST /api/v1/checkin</code>, <code>GET /api/v1/releases/:token</code>.</p>
+<p class="muted small">Endpoints: <code>GET /api/v1/me</code>, <code>GET|POST /api/v1/switches</code>, <code>GET|PATCH|DELETE /api/v1/switches/:id</code>, <code>PUT /api/v1/switches/:id/bundle</code>, <code>POST /api/v1/switches/:id/(pause|resume|recipients)</code>, <code>DELETE /api/v1/switches/:id/recipients/:rid</code>, <code>POST /api/v1/checkin</code>, <code>GET /api/v1/releases/:token</code>, <code>POST /api/v1/redeem</code> (<code>{"code"}</code>), <code>GET|POST /api/v1/invites</code>.</p>
 <p class="muted small">A warning: an agent or cron job that checks in for you means the switch never fires. Check in yourself, or make sure whatever checks in for you would stop if you did.</p></div>
+<div class="card" id="codes"><h2>Codes and invites</h2>
+<p>A credit code someone gave you (<code>CR-XXXX-XXXX-XXXX-XXXX</code>) is days of Keeper: redeem it under "Have a code?" on <a href="/me#code">your page</a>. Days go on the end of a Keeper plan you already have.</p>
+<p>Every account also gets three single-use <a href="/invites">invite links</a>. When someone new makes an account through yours, you both get a week of Keeper. And your own link (<code>?ref=…</code>) is there to share anywhere; we remember who brought whom.</p></div>
 <div class="card"><h2>Who runs this</h2><p><a href="https://profullstack.com">Profullstack, Inc.</a> Source: <a href="${REPO}">${REPO.replace('https://', '')}</a>. Questions: <a href="mailto:switch@pit.world">switch@pit.world</a>.</p></div>`,
   })
 }
@@ -280,6 +283,11 @@ ${armed ? `<form method="post" action="/me/checkin" class="checkin-all">${csrfFi
     <button class="btn">Make it</button>
   </form></details>` : `<p class="muted small">Your plan holds ${d.limits.switches} switch${d.limits.switches === 1 ? '' : 'es'}. ${d.paid ? '' : '<a href="/plans">Keeper</a> holds 10.'}</p>`}
 </div>
+<div class="card" id="code">
+  <h2>Have a code?</h2>
+  <form method="post" action="/me/redeem" class="row">${csrfField(ctx)}<input name="code" required maxlength="64" placeholder="CR-XXXX-XXXX-XXXX-XXXX" autocomplete="off" spellcheck="false" aria-label="Credit code"><button class="btn ghost">Redeem</button></form>
+  <p class="muted small">A credit code is days of Keeper. You also have <a href="/invites">invite links</a> to give: when someone new joins through yours, you both get a week of Keeper.</p>
+</div>
 <div class="card" id="devices">
   <h2>Reminders on this device</h2>
   <p class="muted">Get the check-in on your phone's lock screen with an "I'm OK" button. Add this site to your home screen first on iPhone.</p>
@@ -306,6 +314,58 @@ ${armed ? `<form method="post" action="/me/checkin" class="checkin-all">${csrfFi
     <form method="post" action="/me/delete" class="stack">${csrfField(ctx)}<p>This deletes every switch and sealed bundle. Nobody will be sent anything.</p><label><input type="checkbox" name="sure" value="1" required> Yes, delete everything</label><button class="btn danger">Delete my account</button></form>
   </details>
 </div>`,
+  })
+}
+
+/** Where an invite link lands: the invite rides in a cookie (and on the sign-in link) until they make an account. */
+export function invitedPage(ctx: Ctx, bonusDays: number): string {
+  return layout({
+    ctx,
+    noindex: true,
+    title: "You're invited · deadman.switch",
+    description: 'An invite to deadman.switch.',
+    path: '/',
+    body: `<section class="hero"><p class="muted">Invite</p><h1>You're invited to deadman.switch.</h1>
+<p class="tag">Someone thought you should have this: a dead man's switch for your crypto. Seal where the keys are, check in now and then, and if you ever stop, the people you chose get it.</p>
+${ctx.user
+    ? '<p class="muted">You already have an account, so this invite is for someone new. Pass it on.</p><a class="btn" href="/me">My switches</a>'
+    : `<p>Make your account through this invite and you both get <b>${bonusDays} days of Keeper</b> (10 switches, 10 people each, 5 MB bundles, a phone call on the last reminder).</p>
+<a class="btn big" href="/signin?next=/me">Accept: make your account</a>
+<p class="muted small">The invite counts for a new account made in the next 7 days. One switch is free, forever, either way.</p>`}</section>`,
+  })
+}
+
+export type InvitesData = {
+  quota: { total: number; used: number; left: number }
+  invites: { id: string; note: string; created_at: number; expires_at: number | null; used_at: number | null; revoked_at: number | null }[]
+  affiliate: string
+  bonus_days: number
+  link?: string
+  error?: string
+}
+
+export function invitesPage(ctx: Ctx, d: InvitesData): string {
+  const status = (i: InvitesData['invites'][number]) =>
+    i.used_at ? `used ${day(i.used_at)}` : i.revoked_at ? 'withdrawn' : i.expires_at && i.expires_at < Date.now() ? 'expired' : `open, made ${day(i.created_at)}`
+  return layout({
+    ctx,
+    noindex: true,
+    title: 'Invites · deadman.switch',
+    description: 'Your invite links.',
+    path: '/invites',
+    body: `<section class="hero left"><h1>Invites</h1><p class="tag">You have <b>${d.quota.left}</b> of ${d.quota.total} invite links left. Each works once, for someone who makes a new account through it. You both get ${d.bonus_days} days of Keeper.</p></section>
+${d.error ? `<p class="note error">${esc(d.error)}</p>` : ''}
+${d.link ? `<div class="card"><p class="note">Your new invite link (shown once, copy it now):</p><pre>${esc(d.link)}</pre></div>` : ''}
+<div class="card">
+  ${d.quota.left > 0 ? `<form method="post" action="/invites" class="row">${csrfField(ctx)}<input name="note" maxlength="80" placeholder="Who is it for? (only you see this)" aria-label="Note"><button class="btn">Make an invite link</button></form>` : '<p class="muted">You have used all your invites.</p>'}
+  ${d.invites.length ? `<ul>${d.invites.map((i) => `<li>${esc(i.note || 'invite')} <span class="muted small">${esc(status(i))}</span></li>`).join('')}</ul>` : ''}
+</div>
+<div class="card">
+  <h2>Your link for everyone else</h2>
+  <p class="muted">Share it anywhere. People who make an account after arriving through it are counted as yours.</p>
+  <pre>${esc(d.affiliate)}</pre>
+</div>
+<p><a class="btn ghost" href="/me">My switches</a></p>`,
   })
 }
 
