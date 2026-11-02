@@ -206,4 +206,18 @@ run('deadman.switch end to end', () => {
     expect(u.plan).toBe('pro')
     expect(Math.round((u.plan_until!.getTime() - clock) / DAY)).toBe(365)
   })
+
+  test('sign out works (it used to hit the sign-in link route: "That link is used up")', async () => {
+    expect(await (await req('/me')).text()).toContain('owner@example.com')
+    const res = await req('/auth/logout', { method: 'POST', body: new URLSearchParams({ csrf }), headers: { 'content-type': 'application/x-www-form-urlencoded' } })
+    expect(res.status).toBe(302)
+    expect(res.headers.get('location')).toBe('/')
+    expect(await res.text()).not.toContain('That link is used up')
+    // The session is gone on the server, not just the cookie.
+    const after = await req('/me')
+    expect(await after.text()).not.toContain('owner@example.com')
+    // A typed /auth/logout goes home instead of a sign-in button for the token "logout".
+    const typed = await req('/auth/logout')
+    expect(typed.status).toBe(302)
+  })
 })
