@@ -149,6 +149,17 @@ export function createApp(deps: Deps) {
     return page(c, signinPage(ctx, { sent: email }))
   })
 
+  // Sign out BEFORE /auth/:token: registered after it, POST /auth/logout matched the sign-in link
+  // route with token "logout" and answered "That link is used up", so nobody could sign out.
+  app.post('/auth/logout', async (c) => {
+    const f = await form(c)
+    if (csrfOk(c, f.csrf)) await store.endSession(sessionId(c))
+    deleteCookie(c, SESSION, { path: '/' })
+    return c.redirect('/')
+  })
+  // A typed or bookmarked /auth/logout (GET) is not a sign-in link either: send it home.
+  app.get('/auth/logout', (c) => c.redirect('/'))
+
   app.get('/auth/:token', async (c) => page(c, confirmSigninPage(await ctxOf(c), c.req.param('token'), safeNext(c.req.query('next')))))
 
   app.post('/auth/:token', async (c) => {
@@ -166,13 +177,6 @@ export function createApp(deps: Deps) {
     const sid = await store.newSession(user.id)
     setCookie(c, SESSION, sid, { httpOnly: true, secure: deps.secureCookies ?? https(c), sameSite: 'Lax', path: '/', maxAge: 60 * 86400 })
     return c.redirect(safeNext(f.next))
-  })
-
-  app.post('/auth/logout', async (c) => {
-    const f = await form(c)
-    if (csrfOk(c, f.csrf)) await store.endSession(sessionId(c))
-    deleteCookie(c, SESSION, { path: '/' })
-    return c.redirect('/')
   })
 
   // ---- the owner's pages ------------------------------------------------------
