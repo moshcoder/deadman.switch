@@ -74,7 +74,7 @@ ${RING_PLACEHOLDER}
   <nav aria-label="Site">
     <a href="/help">How it works</a>
     <a href="/plans">Plans</a>
-    ${signedIn ? `<a href="/me">My switches</a><a href="/invites">Invites</a><form method="post" action="/auth/logout"><input type="hidden" name="csrf" value="${esc(o.ctx.csrf)}"><button class="linkish">Sign out</button></form>` : '<a href="/signin">Sign in</a>'}
+    ${signedIn ? `<span class="muted small who" title="Signed in as">${esc(o.ctx.user!.email)}</span><a href="/me">My switches</a><a href="/invites">Invites</a><form method="post" action="/auth/logout"><input type="hidden" name="csrf" value="${esc(o.ctx.csrf)}"><button class="linkish">Sign out</button></form>` : '<a href="/signin">Sign in</a>'}
   </nav>
 </header>
 <main>
@@ -202,7 +202,9 @@ ${o.error ? `<p class="note error">${esc(o.error)}</p>` : ''}
   })
 }
 
-export function confirmSigninPage(ctx: Ctx, t: string, next: string): string {
+const maskEmail = (e: string) => e.replace(/^(.)(.*)(@.*)$/, (_m, a: string, b: string, d: string) => `${a}${'*'.repeat(Math.min(b.length, 6))}${d}`)
+
+export function confirmSigninPage(ctx: Ctx, t: string, next: string, email: string | null = null): string {
   return layout({
     ctx,
     noindex: true,
@@ -215,6 +217,7 @@ export function confirmSigninPage(ctx: Ctx, t: string, next: string): string {
   <input type="hidden" name="next" value="${esc(next)}">
   <button class="btn big">Sign in to deadman.switch</button>
 </form>
+${email ? `<p>This signs this browser in as <b>${esc(maskEmail(email))}</b>. Only press it on your own device: whoever presses it gets that account.</p>` : ''}
 <p class="muted small">One click, so a mail scanner that opens links can't use yours up.</p>
 </div>`,
   })
@@ -310,6 +313,8 @@ ${armed ? `<form method="post" action="/me/checkin" class="checkin-all">${csrfFi
   ${d.apiKey ? `<p class="note">Your API key (shown once): <code>${esc(d.apiKey)}</code></p>` : ''}
   <form method="post" action="/me/key">${csrfField(ctx)}<button class="btn ghost">${d.apiKey ? 'Make another key' : 'Make an API key'}</button></form>
   <p class="muted small">For the CLI, the API and MCP. A new key replaces the old one.</p>
+  <form method="post" action="/me/signout-all">${csrfField(ctx)}<button class="btn ghost">Sign out everywhere</button></form>
+  <p class="muted small">Ends every session on every device, and turns push reminders off until you turn them on again.</p>
   <details><summary class="bad">Delete my account</summary>
     <form method="post" action="/me/delete" class="stack">${csrfField(ctx)}<p>This deletes every switch and sealed bundle. Nobody will be sent anything.</p><label><input type="checkbox" name="sure" value="1" required> Yes, delete everything</label><button class="btn danger">Delete my account</button></form>
   </details>

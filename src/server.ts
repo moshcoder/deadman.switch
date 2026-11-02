@@ -160,7 +160,7 @@ export function createApp(deps: Deps) {
   // A typed or bookmarked /auth/logout (GET) is not a sign-in link either: send it home.
   app.get('/auth/logout', (c) => c.redirect('/'))
 
-  app.get('/auth/:token', async (c) => page(c, confirmSigninPage(await ctxOf(c), c.req.param('token'), safeNext(c.req.query('next')))))
+  app.get('/auth/:token', async (c) => page(c, confirmSigninPage(await ctxOf(c), c.req.param('token'), safeNext(c.req.query('next')), await store.peekLoginLink(c.req.param('token')))))
 
   app.post('/auth/:token', async (c) => {
     const f = await form(c)
@@ -174,7 +174,19 @@ export function createApp(deps: Deps) {
     if (getCookie(c, INVITE)) deleteCookie(c, INVITE, { path: '/' })
     const ref = link.ref ?? getCookie(c, REF)
     if (ref && created) await rewards.affiliates.attribute(ref, user.id).catch(() => null)
+    // Whoever was signed in here before is signed out server-side too, not just in this browser.
+    const before = sessionId(c)
+    if (before) await store.endSession(before)
     const sid = await store.newSession(user.id)
+    // An existing account hears about every sign-in, so a link used by someone else does not go unnoticed.
+    if (!created) {
+      const ua = (c.req.header('user-agent') ?? 'unknown browser').slice(0, 200)
+      await notifier.mail({
+        to: user.email,
+        subject: 'New sign-in to your deadman.switch',
+        text: `Someone just signed in to your deadman.switch account.\n\nWhen: ${new Date().toUTCString()}\nFrom: ${ip(c)}\nBrowser: ${ua}\n\nIf that was not you, sign in and press "Sign out everywhere" on ${RELAY_ORIGIN}/me#account. It ends every session, including this one.\n`,
+      }).catch(() => false)
+    }
     setCookie(c, SESSION, sid, { httpOnly: true, secure: deps.secureCookies ?? https(c), sameSite: 'Lax', path: '/', maxAge: 60 * 86400 })
     return c.redirect(safeNext(f.next))
   })
@@ -245,7 +257,7 @@ export function createApp(deps: Deps) {
     }
   })
 
-  app.post('/me/:action{(checkin|phone|name|key|delete)}', async (c) => {
+  app.post('/me/:action{(checkin|phone|name|key|delete|signout-all)}', async (c) => {
     const s = await signedIn(c)
     if (!s) return c.redirect('/signin?next=/me')
     const f = await form(c)
@@ -265,6 +277,10 @@ export function createApp(deps: Deps) {
       case 'name':
         await store.updateUser(s.user.id, { name: String(f.name ?? '').trim() })
         return c.redirect('/me?flash=Saved.#account')
+      case 'signout-all':
+        await store.endAllSessions(s.user.id)
+        deleteCookie(c, SESSION, { path: '/' })
+        return page(c, messagePage(await ctxOf(c), { title: 'Signed out everywhere', message: 'Every browser signed in to your account is signed out, and push reminders are off until you turn them on again. Your switches keep running.', link: { href: '/signin?next=/me', label: 'Sign in again' } }))
       case 'key':
         return dashboard(c, s.ctx, { apiKey: await store.newApiKey(s.user.id) })
       case 'delete':

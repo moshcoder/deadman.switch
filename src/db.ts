@@ -202,6 +202,18 @@ export class Store {
   }
 
   /** One use, unexpired: the email it was sent to (and any invite/ref it carries), or null. */
+  /** Which address a sign-in link is for, without spending it (the confirm page names the account). */
+  async peekLoginLink(t: string): Promise<string | null> {
+    const [r] = await this.sql`SELECT email FROM login_links WHERE token_hash = ${hash(t)} AND expires_at > ${this.now()}`
+    return r ? String(r.email) : null
+  }
+
+  /** Sign out everywhere: every session and every push subscription (they carry one-tap check-in links). */
+  async endAllSessions(userId: string): Promise<void> {
+    await this.sql`DELETE FROM sessions WHERE user_id = ${userId}`
+    await this.sql`DELETE FROM push_subs WHERE user_id = ${userId}`
+  }
+
   async takeLoginLink(t: string): Promise<{ email: string; invite: string | null; ref: string | null } | null> {
     const [r] = await this.sql`DELETE FROM login_links WHERE token_hash = ${hash(t)} AND expires_at > ${this.now()} RETURNING email, invite, ref`
     return r ? { email: r.email, invite: r.invite ?? null, ref: r.ref ?? null } : null
