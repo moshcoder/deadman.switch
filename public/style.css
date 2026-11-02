@@ -26,6 +26,7 @@ main { max-width: 760px; margin: 0 auto; padding: 0 16px 3rem; }
 .top nav { display: flex; gap: 1rem; flex-wrap: wrap; font-size: .92rem; align-items: center; }
 .top nav a { color: var(--muted); }
 .top nav form { margin: 0; }
+.top nav .who { max-width: 14rem; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .linkish { font: inherit; background: none; border: 0; color: var(--muted); cursor: pointer; padding: 0; }
 .hero { text-align: center; padding: 4rem 0 2rem; }
 .hero h1 { font-size: clamp(2rem, 7vw, 3.2rem); line-height: 1.08; margin: 0 0 .7rem; letter-spacing: -.03em; }

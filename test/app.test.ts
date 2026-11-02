@@ -109,6 +109,39 @@ run('deadman.switch end to end', () => {
     expect(await (await req(`/s/${switchId}`)).text()).toContain('kid@example.com')
   })
 
+  test('another account never sees your switch; sign-ins are announced; sign out everywhere', async () => {
+    // A second person signs in through their own link: the confirm page names the account it is for.
+    const mine = cookie
+    cookie = ''
+    await req('/signin', { method: 'POST', body: new URLSearchParams({ csrf: 'anon', email: 'stranger@example.com', next: '/me' }), headers: { 'content-type': 'application/x-www-form-urlencoded' } })
+    const t = lastLink(/\/auth\/([A-Za-z0-9_-]+)/)
+    expect(await (await req(`/auth/${t}`)).text()).toContain('s******@example.com')
+    const res = await req(`/auth/${t}`, { method: 'POST', body: new URLSearchParams({ next: '/me' }), headers: { 'content-type': 'application/x-www-form-urlencoded' } })
+    cookie = res.headers.get('set-cookie')!.split(';')[0]!
+    expect((await req(`/s/${switchId}`)).status).toBe(404)
+    const theirs = await (await req('/me')).text()
+    expect(theirs).toContain('stranger@example.com')
+    expect(theirs).not.toContain(switchId)
+    // A brand-new account gets no sign-in alert; an existing one does.
+    expect(mails.some((m) => m.to === 'stranger@example.com' && /New sign-in/.test(m.subject))).toBe(false)
+    cookie = ''
+    await req('/signin', { method: 'POST', body: new URLSearchParams({ csrf: 'anon', email: 'owner@example.com', next: '/me' }), headers: { 'content-type': 'application/x-www-form-urlencoded' } })
+    const t2 = lastLink(/\/auth\/([A-Za-z0-9_-]+)/)
+    const r2 = await req(`/auth/${t2}`, { method: 'POST', body: new URLSearchParams({ next: '/me' }), headers: { 'content-type': 'application/x-www-form-urlencoded', 'user-agent': 'TestBrowser/1', 'x-real-ip': '203.0.113.9' } })
+    const second = r2.headers.get('set-cookie')!.split(';')[0]!
+    const alert = mails.at(-1)!
+    expect(alert.to).toBe('owner@example.com')
+    expect(alert.subject).toContain('New sign-in')
+    expect(alert.text).toContain('TestBrowser/1')
+    // Sign out everywhere from the first session ends the second one too.
+    cookie = mine
+    expect((await post('/me/signout-all', {})).status).toBe(200)
+    expect((await req('/me')).status).toBe(302)
+    cookie = second
+    expect((await req('/me')).status).toBe(302)
+    await resignIn()
+  })
+
   test('the free plan holds one switch', async () => {
     const res = await post('/s', { name: 'Second' })
     expect(await res.text()).toContain('Your plan holds 1 switch')
