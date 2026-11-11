@@ -66,6 +66,7 @@ ${o.noindex ? '<meta name="robots" content="noindex">' : `<link rel="canonical" 
 <link rel="stylesheet" href="${STYLE_URL}">
 ${o.script ? `<script src="${SCRIPT_URL}" defer></script>` : ''}
 ${o.track ? TRACKER : ''}
+<script type="module" data-webmcp src="https://cdn.jsdelivr.net/npm/@profullstack/webmcp@0/src/embed.js" data-pages="{&quot;how_it_works&quot;:&quot;/help&quot;,&quot;plans&quot;:&quot;/plans&quot;,&quot;sign_in&quot;:&quot;/signin&quot;,&quot;my_switches&quot;:&quot;/me&quot;,&quot;invites&quot;:&quot;/invites&quot;}"></script>
 </head>
 <body>
 ${RING_PLACEHOLDER}
@@ -274,7 +275,7 @@ export function dashboardPage(ctx: Ctx, d: DashboardData): string {
     path: '/me',
     body: `${d.flash ? `<p class="note">${esc(d.flash)}</p>` : ''}
 <section class="hero left"><h1>My switches</h1><p class="muted">${esc(user.email)} · ${esc(d.plan)}</p></section>
-${armed ? `<form method="post" action="/me/checkin" class="checkin-all">${csrfField(ctx)}<button class="btn big">I'm here: check in${armed > 1 ? ` on all ${armed}` : ''}</button></form>` : ''}
+${armed ? `<form method="post" action="/me/checkin" class="checkin-all" toolname="check_in" tooldescription="Check in on every armed switch (resets their timers). The person confirms by pressing the button.">${csrfField(ctx)}<button class="btn big">I'm here: check in${armed > 1 ? ` on all ${armed}` : ''}</button></form>` : ''}
 <div class="card">
   ${rows ? `<ul class="switches">${rows}</ul>` : '<p>No switch yet. Make your first one below: it takes a minute.</p>'}
   ${d.switches.length < d.limits.switches ? `<details${rows ? '' : ' open'}><summary>New switch</summary>
