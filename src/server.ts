@@ -120,6 +120,13 @@ export function createApp(deps: Deps) {
   app.get('/', async (c) => page(c, homePage(await ctxOf(c))))
   app.get('/help', async (c) => page(c, helpPage(await ctxOf(c))))
 
+  // For crawlers: the public pages, named on the host that was asked (deadman.switch on Moshpit, the relay otherwise).
+  const PUBLIC_PATHS = ['/', '/help', '/plans']
+  app.get('/robots.txt', (c) => c.body(`User-agent: *\nDisallow: /me\nDisallow: /signin\nDisallow: /auth/\nDisallow: /api/\nDisallow: /hooks/\nDisallow: /invites\nDisallow: /i/\nDisallow: /s/\nDisallow: /c/\nDisallow: /r/\nAllow: /\nSitemap: ${origin(c)}/sitemap.xml\n`, 200, { 'content-type': 'text/plain; charset=utf-8', 'cache-control': 'public, max-age=3600' }))
+  app.get('/sitemap.xml', (c) =>
+    c.body(`<?xml version="1.0" encoding="UTF-8"?>\n<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">${PUBLIC_PATHS.map((p) => `<url><loc>${origin(c)}${p}</loc></url>`).join('')}</urlset>`, 200, { 'content-type': 'application/xml; charset=utf-8', 'cache-control': 'public, max-age=3600' }),
+  )
+
   // ---- signing in -------------------------------------------------------------
 
   app.get('/signin', async (c) => {
